@@ -63,7 +63,7 @@ get_username(Server, Socket) ->
       Server ! {check_username, self(), Username},
       receive
         existed ->
-          ok = gen_tcp:send(Socket, "Nom d'utilisateur deja pris, chosissez un autre: "),
+          ok = gen_tcp:send(Socket, "Nom d'utilisateur déjà pris, chosissez un autre: "),
           get_username(Server, Socket);
 
         ok ->

@@ -74,13 +74,13 @@ loop(S) ->
 
 
     {disconnected, From, Username, _Reason} ->
-      LeaveMessage = Username ++ " deconnecte!\n",
+      LeaveMessage = Username ++ " s'est deconnecté!\n",
       broadcast_message(LeaveMessage, From, S#state.clients),
       UpdatedClients = orddict:erase(Username, S#state.clients),
       loop(S#state{clients = UpdatedClients});
 
     _ ->
-      error,
+      oops,
       loop(S)
   end.
 
@@ -92,6 +92,7 @@ broadcast_message(Message, Client, Clients) ->
   lists:map(fun({_Username, UserPid}) -> UserPid ! {receive_message, Message} end, BroadList).
 
 
+%% when a new user comes, message history will be sent to him
 send_history(_Client, []) -> ok;
 send_history(Client, [Message | MessageHistory]) ->
   Client ! {receive_message, Message},
