@@ -8,10 +8,9 @@
 %%%-------------------------------------------------------------------
 -module(chat_client).
 -author("ngoctu").
--compile(export_all).
 
 %% API
--export([client_init/2]).
+-export([client_init/2, client_listener/2]).
 
 %% initialize client with username
 client_init(Server, Socket) ->
@@ -34,11 +33,17 @@ client_loop(Server, Username, Socket) ->
 
     {tcp_closed, Reason} ->
       Server ! {disconnected, self(), Username, Reason},
-      exit(normal);
+      gen_tcp:close(Socket),
+      erlang:exit(normal);
 
     % message from server
     {receive_message, Message} ->
-      ok = gen_tcp:send(Socket, "\r" ++ Message)
+      ok = gen_tcp:send(Socket, "\r" ++ Message);
+
+    {server_down} ->
+      ok = gen_tcp:send(Socket, "Chat serveur est mort, au revoir!\n"),
+      gen_tcp:close(Socket),
+      exit(normal)
   end,
 
   ok = gen_tcp:send(Socket, Username ++ ": "),

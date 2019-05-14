@@ -12,12 +12,20 @@
                 clients = [],
                 message_history = []}).
 
--compile(export_all).
+-export([start/1, stop/0, init/1, worker/2]).
+
 
 start(Port) ->
   io:format("Starting chat server...~n"),
   register(?MODULE, Pid = spawn(?MODULE, init, [Port])),
   io:format("Chat server started with pid ~p~n", [Pid]).
+
+
+stop() ->
+  io:format("Server is shutting down...~n"),
+  Server = whereis(?MODULE),
+  Server ! down,
+  exit(Server, normal).
 
 
 init(Port) ->
@@ -35,7 +43,6 @@ worker(Server, LSocket) ->
     _ ->
       error
   end,
-  Server ! {disconnected, self()},
   io:format("~p worker died~n", [self()]).
 
 
@@ -78,6 +85,10 @@ loop(S) ->
       broadcast_message(LeaveMessage, From, S#state.clients),
       UpdatedClients = orddict:erase(Username, S#state.clients),
       loop(S#state{clients = UpdatedClients});
+
+    down ->
+      gen_tcp:close(S#state.listen_socket),
+      lists:map(fun({_Username, UserPid}) -> UserPid ! {server_down} end, S#state.clients);
 
     _ ->
       oops,
