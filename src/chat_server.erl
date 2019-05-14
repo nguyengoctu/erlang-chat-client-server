@@ -23,9 +23,7 @@ start(Port) ->
 
 stop() ->
   io:format("Server is shutting down...~n"),
-  Server = whereis(?MODULE),
-  Server ! down,
-  exit(Server, normal).
+  exit(whereis(?MODULE), normal).
 
 
 init(Port) ->
@@ -39,7 +37,8 @@ worker(Server, LSocket) ->
     {ok, CSocket} ->
       io:format("Incoming user from ~p~n", [CSocket]),
       Server ! new_worker,
-      chat_client:client_init(Server, CSocket);
+      Ref = monitor(process, whereis(Server)),
+      chat_client:client_init(Server, CSocket, Ref);
     _ ->
       error
   end,
@@ -48,7 +47,7 @@ worker(Server, LSocket) ->
 
 loop(S) ->
   receive
-    {ready, From, Username} ->
+    {ready, From, _Ref, Username} ->
       io:format("~p with pid ~p has joined the chat room~n", [Username, From]),
       JoinMessage = Username ++ " dit bonjour!\n",
       broadcast_message(JoinMessage, From, S#state.clients),
@@ -74,7 +73,7 @@ loop(S) ->
       end,
       loop(S);
 
-    {broadcast, From, Message} ->
+    {broadcast, From, _Ref, Message} ->
       broadcast_message(Message, From, S#state.clients),
       UpdatedHistory = [Message | S#state.message_history],
       loop(S#state{message_history = UpdatedHistory});
@@ -85,10 +84,6 @@ loop(S) ->
       broadcast_message(LeaveMessage, From, S#state.clients),
       UpdatedClients = orddict:erase(Username, S#state.clients),
       loop(S#state{clients = UpdatedClients});
-
-    down ->
-      gen_tcp:close(S#state.listen_socket),
-      lists:map(fun({_Username, UserPid}) -> UserPid ! {server_down} end, S#state.clients);
 
     _ ->
       oops,

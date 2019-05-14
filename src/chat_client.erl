@@ -10,17 +10,17 @@
 -author("ngoctu").
 
 %% API
--export([client_init/2, client_listener/2]).
+-export([client_init/3, client_listener/3]).
 
 %% initialize client with username
-client_init(Server, Socket) ->
+client_init(Server, Socket, Ref) ->
   ok = gen_tcp:send(Socket, "Bonjour\n"),
   ok = gen_tcp:send(Socket, "Choisissez votre nom d'utilisateur: "),
   Username = get_username(Server, Socket),
 
   ok = gen_tcp:send(Socket, Username ++ ": "),
-  Server ! {ready, self(), Username},
-  spawn_link(?MODULE, client_listener, [self(), Socket]),
+  Server ! {ready, self(), Ref, Username},
+  spawn_link(?MODULE, client_listener, [self(), Socket, Ref]),
   client_loop(Server, Username, Socket).
 
 %% receive message from the listener, forward it to the server
@@ -28,11 +28,11 @@ client_init(Server, Socket) ->
 client_loop(Server, Username, Socket) ->
   receive
     % message from listener
-    {send_message, Message} ->
-      Server ! {broadcast, self(), Username ++ ": " ++ Message};
+    {send_message, Ref, Message} ->
+      Server ! {broadcast, self(), Ref, Username ++ ": " ++ Message};
 
-    {tcp_closed, Reason} ->
-      Server ! {disconnected, self(), Username, Reason},
+    {tcp_closed, Ref, Reason} ->
+      Server ! {disconnected, self(), Ref, Username, Reason},
       gen_tcp:close(Socket),
       erlang:exit(normal);
 
@@ -40,8 +40,8 @@ client_loop(Server, Username, Socket) ->
     {receive_message, Message} ->
       ok = gen_tcp:send(Socket, "\r" ++ Message);
 
-    {server_down} ->
-      ok = gen_tcp:send(Socket, "Chat serveur est mort, au revoir!\n"),
+    {'DOWN', _Ref, process, _Pid, _Reason} ->
+      ok = gen_tcp:send(Socket, "Chat serveur est hors service, au revoir!\n"),
       gen_tcp:close(Socket),
       exit(normal)
   end,
@@ -51,13 +51,13 @@ client_loop(Server, Username, Socket) ->
 
 
 %% waiting for input for the client, then send the input message to the client himself
-client_listener(Client, Socket) ->
+client_listener(Client, Socket, Ref) ->
   case gen_tcp:recv(Socket, 0) of
     {ok, Pack} ->
-      Client ! {send_message, Pack},
-      client_listener(Client, Socket);
+      Client ! {send_message, Ref, Pack},
+      client_listener(Client, Socket, Ref);
     {error, Reason} ->
-      Client ! {tcp_closed, Reason}
+      Client ! {tcp_closed, Ref, Reason}
   end.
 
 %% check username exists or not
